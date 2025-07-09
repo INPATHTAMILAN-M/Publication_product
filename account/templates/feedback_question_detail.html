@@ -7,19 +7,31 @@
         display: flex;
         margin-bottom: 20px;
     }
-    .tab-btn {
-        padding: 10px 15px;
-        cursor: pointer;
-        border: 1px solid #ccc;
-        border-radius: 5px 5px 0 0;
-        background-color: white; /* Changed to white */
-        margin-right: 5px;
-        color: #000; /* Make text visible on white background */
+    
+    .tab-btn-container {
+        display: flex;
+        border-bottom: 1px solid #ddd;
+        margin-bottom: 20px;
     }
+
+    .tab-btn {
+        padding: 10px 20px;
+        cursor: pointer;
+        border: 1px solid #ddd;
+        border-bottom: none;
+        background-color: #f8f9fa;
+        margin-right: 5px;
+        border-radius: 5px 5px 0 0;
+        position: relative;
+        bottom: -1px;
+        transition: all 0.3s ease;
+    }
+
     .tab-btn.active {
-        background-color: rgb(233, 199, 11); /* Keep active tab white */
-        color: #0c0c0c;           /* Highlight active tab text */
-        border-bottom: 1px solid white; /* Seamless tab transition */
+        background-color: white;
+        border-color: #ddd;
+        border-bottom: 1px solid #044d5e;
+        color: #044d5e;
         font-weight: bold;
     }
     .tab-content {
@@ -116,7 +128,7 @@
                                     <div class="accordion-content" id="iteml3">
                                         <ul>
                                             <li><a class="nav-link"  href="{% url 'date_settings' %}">Date Settings</a></li>
-                                            <li><a class="nav-link" href="{% url 'modes' %}">Communication Modes</a></li>
+                                            <li><a class="nav-link" href="{% url 'modes' %}">Mode Settings</a></li>
                                         </ul>
                                     </div>
                                 </div>

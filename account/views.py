@@ -554,20 +554,37 @@ def date_settings(request):
     return render(request, 'date_settings.html', {'journals': journals, 'dates': dates})
 
 # ------------------------------------------------------------------------Modes------------------------------------------------------------------------------------------------
-def modes(request): 
-    modes = Modes.objects.all()
-
+def modes(request):
+    communication_modes = Modes.objects.all().exclude(name='Skip AE')
+    flow_change_modes = Modes.objects.filter(name='Skip AE')
+    
     if request.method == 'POST':
-        for mode in modes:
-            # Checkbox sends 'on' if checked; if missing, unchecked
+        # Get the active tab from POST data
+        active_tab = request.POST.get('active_tab', 'communication')
+        
+        # Update  modes
+        for mode in communication_modes:
             mode.is_active = (f'mode_{mode.id}' in request.POST)
             mode.save()
-        return redirect('modes')  # or wherever you want to redirect after save
 
-    return render(request, 'modes.html', {'modes': modes})
+        # Update flow change modes
+        for mode in flow_change_modes:
+            mode.is_active = (f'mode_{mode.id}' in request.POST)
+            mode.save()
+
+        # Redirect with the active tab parameter
+        return redirect(f'{reverse("modes")}?active_tab={active_tab}')
+    
+    # GET request handling
+    active_tab = request.GET.get('active_tab', 'communication')
+    
+    return render(request, 'modes.html', {
+        'communication_modes': communication_modes,
+        'flow_change_modes': flow_change_modes,
+        'active_tab': active_tab,
+    })
 # ------------------------------------------------------------------------Index home page ---------------------------------------------------------------------------------------
 from django.db.models import Q
-
 
 def index(request):
     # if request.user.is_authenticated:

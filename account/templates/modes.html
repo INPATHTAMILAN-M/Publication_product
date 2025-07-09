@@ -2,20 +2,57 @@
 {% load static %}
 
 {% block content %}
- <style>
-  .save-button {
-    background-color: #044d5e;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    font-size: 16px;
-    cursor: pointer;
-    border-radius: 5px;
-  }
+<style>
 
-  .save-button:hover {
-    background-color: #044d5e;
-  }
+    .save-button {
+        background-color: #044d5e;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        font-size: 16px;
+        cursor: pointer;
+        border-radius: 5px;
+    }
+
+    .save-button:hover {
+        background-color: #022c35;
+    }
+
+    .mode-tabs-container {
+        display: flex;
+        border-bottom: 1px solid #ddd;
+        margin-bottom: 20px;
+    }
+
+    .mode-tab {
+        padding: 10px 20px;
+        cursor: pointer;
+        border: 1px solid #ddd;
+        border-bottom: none;
+        background-color: #f8f9fa;
+        margin-right: 5px;
+        border-radius: 5px 5px 0 0;
+        position: relative;
+        bottom: -1px;
+        transition: all 0.3s ease;
+    }
+
+    .mode-tab.active {
+        background-color: white;
+        border-color: #ddd;
+        border-bottom: 1px solid #044d5e;
+        color: #044d5e;
+        font-weight: bold;
+    }
+
+    .mode-tab:not(.active):hover {
+        background-color: #e9ecef;
+    }
+
+    .mode-content {
+        margin-top: 20px;
+    }
+
 </style>
 <section class="job-list-section pt-60 pb-60">
     <div class="container-fluid">
@@ -23,41 +60,42 @@
             <div class="col-md-3">
                 <div class="about-information-sticky">
                     <ul>
-                         <li >
+                        <li>
                             <a class="nav-link" href="{% url 'dashboard' %}">
                                 Dashboard
                             </a>
                         </li>
-                        <li >
+                        <li>
                             <a class="nav-link" href="{% url 'user_management' %}">
                                 User Management
                             </a>
                         </li>
-                        <li >
+                        <li>
                             <a class="nav-link" href="{% url 'publication_management' %}">
                                 Publication Management
                             </a>
                         </li>
-                        <li >
+                        <li>
                             <a class="nav-link" href="{% url 'analytical_feedback' %}">
                                 Analytical Feedbacks
                             </a>
                         </li>
-                        <li >
-                                <a class="nav-link" href="{% url 'feedback_list' %}">
-                                    Feedbacks
-                                </a>
-                            </li>
-                        <li >
+                        <li>
+                            <a class="nav-link" href="{% url 'feedback_list' %}">
+                                Feedbacks
+                            </a>
+                        </li>
+                        <li>
                             <div class="accordion-item">
                                 <div class="accordion-title" data-tab="iteml3">
-                                    <a class="nav-link" style="color: white;">Settings <i class='bx bx-chevrons-right down-arrow'></i></a>
-                                    
+                                    <a class="nav-link" style="color: white;">Settings <i
+                                            class='bx bx-chevrons-right down-arrow'></i></a>
+
                                 </div>
                                 <div class="accordion-content" id="iteml3">
                                     <ul>
                                         <li><a class="nav-link" href="{% url 'date_settings' %}">Date Settings</a></li>
-                                        <li><a class="nav-link active" href="{% url 'modes' %}">Communication Modes</a></li>
+                                        <li><a class="nav-link active" href="{% url 'modes' %}">Modes Settings</a></li>
                                     </ul>
                                 </div>
                             </div>
@@ -67,22 +105,71 @@
                 </div>
             </div>
             <div class="col-md-9 ms-sm-auto col-lg-9 px-md-4">
-                <h2>Communication Modes</h2>
-            <br>
-            <form method="post">
-                {% csrf_token %}
-                {% for mode in modes %}
-                    <label>
-                        <input type="checkbox" name="mode_{{ mode.id }}" {% if mode.is_active %}checked{% endif %}>
-                        {{ mode.name }}
-                    </label><br>
-                {% endfor %}
-                <br>
-                <button type="submit" class="save-button">Save Modes</button>
-            </form>
+                <h2>Modes Settings</h2>
+
+                <!-- Tabs -->
+                <div class="mode-tabs-container">
+                    <span class="mode-tab {% if active_tab == 'communication' %}active{% endif %}" 
+                        id="tab-communication" onclick="showTab('communication')">Communication Modes</span>
+                    <span class="mode-tab {% if active_tab == 'flowchange' %}active{% endif %}" 
+                        id="tab-flowchange" onclick="showTab('flowchange')">Flow Change Modes</span>
+                </div>
+
+                <form method="post" id="modes-form">
+                    {% csrf_token %}
+                    <input type="hidden" id="active-tab-input" name="active_tab" value="{{ active_tab }}">
+
+                    <!-- Mode settings Modes -->
+                    <div id="communication" class="mode-content" {% if active_tab != 'communication' %}style="display:none;"{% endif %}>
+                        {% for mode in communication_modes %}
+                            <label>
+                                <input type="checkbox" name="mode_{{ mode.id }}" {% if mode.is_active %}checked{% endif %}>
+                                {{ mode.name }}
+                            </label><br>
+                        {% empty %}
+                            <p>No Communication Modes found.</p>
+                        {% endfor %}
+                    </div>
+
+                    <!-- Flow Change Modes -->
+                    <div id="flowchange" class="mode-content" {% if active_tab != 'flowchange' %}style="display:none;"{% endif %}>
+                        {% for mode in flow_change_modes %}
+                            <label>
+                                <input type="checkbox" name="mode_{{ mode.id }}" {% if mode.is_active %}checked{% endif %}>
+                                {{ mode.name }}
+                            </label><br>
+                        {% empty %}
+                            <p>No Flow Change Modes found.</p>
+                        {% endfor %}
+                    </div>
+
+                    <br>
+                    <button type="submit" class="save-button">Save Modes</button>
+                </form>
+
+            </div>
         </div>
     </div>
 </section>
 
+<script>
+    function showTab(tabName) {
+        // Hide both
+        document.getElementById('communication').style.display = 'none';
+        document.getElementById('flowchange').style.display = 'none';
 
+        // Remove active class from both tabs
+        document.getElementById('tab-communication').classList.remove('active');
+        document.getElementById('tab-flowchange').classList.remove('active');
+
+        // Show selected tab
+        document.getElementById(tabName).style.display = 'block';
+
+        // Add active class to clicked tab
+        document.getElementById('tab-' + tabName).classList.add('active');
+        
+        // Update the hidden input value
+        document.getElementById('active-tab-input').value = tabName;
+    }
+</script>
 {% endblock %}
