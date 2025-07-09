@@ -9,88 +9,128 @@ import re
 from docx.text.paragraph import Paragraph
 from docx.table import Table
 
-def sanitize_filename1(text):
-    match = re.match(r'fig\s*\d*\s*:\s*(.+)', text, re.I)
-    if match:
-        caption_text = match.group(1)
-    else:
-        caption_text = text
-
-    caption_text = caption_text.lower().strip()
-    caption_text = re.sub(r'[^\w\-_. ]', '', caption_text)
-    caption_text = caption_text.replace(' ', '_')
-
-    return caption_text if caption_text else 'image'
-
+from docx import Document
+from docx.table import Table
+from docx.text.paragraph import Paragraph
+from docx.oxml.ns import qn
+import os
+import re
+from PIL import Image
+from io import BytesIO
 
 def extract_docx(filepath):
     doc = Document(filepath)
-    text = []
-
     media_dir = "extracted_images"
     os.makedirs(media_dir, exist_ok=True)
 
-    pending_image = None
-    pending_image_ext = None
+    output = []
+    image_counter = 1
 
-    for block in iter_block_items(doc):
-        if 'paragraph' in block:
-            para = block['paragraph'].strip()
-            if pending_image and re.match(r'fig\s*\d*\s*:', para, re.I):
-                filename_base = sanitize_filename1(para)
-                image_filename = f"{filename_base}.{pending_image_ext}"
-                image_path = os.path.join(media_dir, image_filename)
-                with open(image_path, 'wb') as f:
-                    f.write(pending_image.blob)
-                text.append(para)
-                text.append(f"<<IMAGE:{image_path}>>")
-                pending_image = None
-                pending_image_ext = None
+    def sanitize_filename(text):
+        match = re.match(r'fig\s*\d*\s*:\s*(.+)', text, re.I)
+        if match:
+            caption_text = match.group(1)
+        else:
+            caption_text = text
+        caption_text = caption_text.lower().strip()
+        caption_text = re.sub(r'[^\w\-_. ]', '', caption_text)
+        caption_text = caption_text.replace(' ', '_')
+        return caption_text if caption_text else f'image_{image_counter}'
+
+    def format_table(table):
+        rows = []
+        for row in table.rows:
+            cells = [cell.text.strip() for cell in row.cells]
+            rows.append(cells)
+        return format_table_as_md(rows)
+
+    def format_table_as_md(data):
+        if not data or len(data) < 1:
+            return ''
+        header = data[0]
+        rows = data[1:]
+        md = []
+        md.append('|' + '|'.join(header) + '|')
+        md.append('|' + '|'.join(['---'] * len(header)) + '|')
+        for row in rows:
+            md.append('|' + '|'.join(row) + '|')
+        return '\n'.join(md)
+
+    # Track relationships for images
+    rels = doc.part._rels
+
+    for block in doc.element.body:
+        if block.tag.endswith('}p'):
+            paragraph = Paragraph(block, doc)
+            text = paragraph.text.strip()
+
+            if not text:
+                output.append("")
+                continue
+
+            # Normalize bullets
+            text = re.sub(r'^[\u2022•\-]\s*', '- ', text)
+
+            # Check for emails
+            email_match = re.search(r'(\S+@\S+)', text)
+            if email_match and not text.startswith("Email:"):
+                before = text[:email_match.start()].strip()
+                email = email_match.group(1)
+                after = text[email_match.end():].strip()
+                if before:
+                    output.append(before)
+                output.append(email)
+                if after:
+                    output.append(after)
+                continue
+
+            # Image captions
+            if re.match(r'fig\s*\d*\s*:', text, re.I):
+                used_image = False
+                for rel in rels.values():
+                    if "image" in rel.reltype:
+                        image_data = rel.target_part.blob
+                        try:
+                            image = Image.open(BytesIO(image_data))
+                            filename_base = sanitize_filename(text)
+                            ext = image.format.lower()
+                            filename = f"{filename_base}.{ext}"
+                            image_path = os.path.join(media_dir, filename)
+                            image.save(image_path)
+                            output.append(text)
+                            output.append(f"<<IMAGE:{image_path}>>\n")
+                            used_image = True
+                            break
+                        except Exception:
+                            continue
+                if not used_image:
+                    output.append(text)
             else:
-                if para:
-                    text.append(para)
+                output.append(text)
 
-        elif 'image' in block:
-            pending_image = block['image']
-            pending_image_ext = pending_image.content_type.split('/')[-1]
+        elif block.tag.endswith('}tbl'):
+            table = Table(block, doc)
+            md_table = format_table(table)
+            if md_table:
+                output.append(md_table)
+                output.append("Table: Extracted Table\n")
 
-        elif 'table' in block:
-            table_data = block['table']
-            for row in table_data:
-                text.append('\t'.join(row))
+    # Clean repeated empty lines
+    cleaned_output = []
+    prev_empty = False
+    for line in output:
+        if line.strip() == '':
+            if not prev_empty:
+                cleaned_output.append('')
+            prev_empty = True
+        else:
+            cleaned_output.append(line)
+            prev_empty = False
 
-    if pending_image:
-        default_name = f"image_{len(text)}.{pending_image_ext}"
-        image_path = os.path.join(media_dir, default_name)
-        with open(image_path, 'wb') as f:
-            f.write(pending_image.blob)
-        text.append(f"<<IMAGE:{image_path}>>")
-
-    return '\n'.join(text)
+    return '\n'.join(cleaned_output)
 
 
-def iter_block_items(parent):
-    for child in parent.element.body.iterchildren():
-        if child.tag == qn('w:tbl'):
-            table = Table(child, parent)
-            data = []
-            for row in table.rows:
-                row_data = [cell.text.strip() for cell in row.cells]
-                data.append(row_data)
-            yield {'table': data}
 
-        elif child.tag == qn('w:p'):
-            paragraph = Paragraph(child, parent)
-            if paragraph.text.strip():
-                yield {'paragraph': paragraph.text.strip()}
-            for run in paragraph.runs:
-                if 'graphic' in run._element.xml:
-                    drawing = run._element.xpath('.//pic:pic')
-                    if drawing:
-                        blip = drawing[0].xpath('.//a:blip')[0]
-                        embed = blip.get(qn('r:embed'))
-                        image_part = parent.part.related_parts[embed]
-                        yield {'image': image_part}
 
 import fitz  # PyMuPDF
 import os

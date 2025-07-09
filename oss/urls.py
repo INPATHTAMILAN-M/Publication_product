@@ -42,14 +42,19 @@ urlpatterns = [
     path('remove_plag_report/<int:submission_id>/', remove_plag_report, name='remove_plag_report'),
     path('reject_manuscript/<int:manuscript_id>/', reject_manuscript, name='reject_manuscript'),
     path('assign_ae/<int:submission_id>/', assign_ae, name='assign_ae'),
+    # manuscripts rejection
     path('manuscripts_rejection/',Manuscripts_rejection, name='manuscripts_rejection'),
+    # manuscripts acceptance
     path('manuscripts_acceptance',Manuscripts_acceptance, name='manuscripts_acceptance'),
-    path('manuscripts_review/',manuscripts_review, name='manuscripts_review'),
     path('send_correction_report/', send_correction_report, name='send_correction_report'),
     path('get-correction-file/', get_correction_file, name='get_correction_file'),
     path('upload_corrected_file/',upload_corrected_file, name='upload_corrected_file'),
+    # manuscripts in review
+    path('manuscripts_review/',manuscripts_review, name='manuscripts_review'),
+    # Manuscripts in revision
     path('manuscripts_revision_overdue/',Manuscripts_revision_overdue, name='manuscripts_revision_overdue'),
     path('manuscripts_revision/',Manuscripts_revision, name='manuscripts_revision'),
+    # Manuscripts in proof
     path('setting_proof/',Setting_proof, name='setting_proof'),
     path('submission_details/<int:submission_id>/', submission_details, name='submission_details'),
     path('reject_submission/', reject_submission, name='reject_submission'),

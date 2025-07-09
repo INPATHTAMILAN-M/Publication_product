@@ -838,14 +838,14 @@ def submission_step_six(request, submission_id):
                 admin =User.objects.get(
                     groups__name='Admin Office'
                 )
-                if Modes.objects.filter(name="Email",is_active=True):
-                    send_email(
-                        to_email=admin.email,
-                        subject='Manuscript Submitted',
-                        template_name='email_templates/submitted_admin.html',
-                        user=admin,
-                        context={'submission': submission , 'admin':admin}
-                    )
+                
+                send_email(
+                    to_email=admin.email,
+                    subject='Manuscript Submitted',
+                    template_name='email_templates/submitted_admin.html',
+                    user=admin,
+                    context={'submission': submission , 'admin':admin}
+                )
                 
             # Redirect to a confirmation page or wherever needed
             return redirect('submitted')  # Replace 'confirmation_page' with your actual URL name

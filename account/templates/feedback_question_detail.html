@@ -91,16 +91,22 @@
                                     User Management
                                 </a>
                             </li>
+                                                        <li >
+                                <a class="nav-link" href="{% url 'publication_management' %}">
+                                    Publication Management
+                                </a>
+                            </li>
                             <li >
                                 <a class="nav-link active" href="{% url 'analytical_feedback' %}">
                                     Analytical Feedbacks
                                 </a>
                             </li>
-                            <li >
-                                <a class="nav-link" href="{% url 'publication_management' %}">
-                                    Publication Management
+                            <li>
+                                <a class="nav-link" href="{% url 'feedback_list' %}">
+                                    Feedbacks
                                 </a>
                             </li>
+
                             <li >
                                 <div class="accordion-item">
                                     <div class="accordion-title" data-tab="iteml3">
@@ -134,13 +140,18 @@
                                     Analytical Feedbacks
                                 </a>
                             </li>
+                            <li>
+                                <a class="nav-link" href="{% url 'feedback_list' %}">
+                                    Feedbacks
+                                </a>
+                            </li>
                         </ul>
                     {% endif %}
                 </div>
             </div>
             <div class="col-md-9 ms-sm-auto col-lg-9 px-md-4">
                 <div class="content">
-                    <a href="{% url 'analytical_feedback' %}" class="btn btn-secondary mb-3">← Back to Feedback Overview</a>
+                    <a href="{% url 'analytical_feedback' %}" class="btn btn-secondary mb-3">← Back to Analytical Feedbacks</a>
 
                     <p><strong>Question: {{ question.question }}</strong></p>
 

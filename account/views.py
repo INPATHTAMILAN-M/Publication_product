@@ -465,9 +465,13 @@ def assign_journal(request):
             editor, created = Editor.objects.get_or_create(user=user)
             # Remove existing journal assignments for the editor
             Journal_Editor_Assignment.objects.filter(editor=editor).delete()
-            # Assign the selected journal to the editor
+            # delete the editor for the journal
+            old_editor_journal = Journal_Editor_Assignment.objects.filter(journal=journal).delete()
+             # Assign the selected journal to the editor
             Journal_Editor_Assignment.objects.create(journal=journal, editor=editor)
+            
             verification_link = f"{settings.SITE_URL}{reverse('login')}"
+            
             context = {
                 'username': username,
                 'journal_name': journal.title,
@@ -1533,11 +1537,8 @@ from django.core.paginator import Paginator
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import user_passes_test
 
-@login_required
-@user_passes_test(lambda u: is_eic(u) or is_super_admin(u))
-def feedback_list(request):
 
-    return render(request, 'feedback_list.html')
+
 
 from collections import Counter
 from django.shortcuts import render
