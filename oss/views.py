@@ -1534,14 +1534,20 @@ def Editor_in_Chief(request):
     skip_ae = Modes.objects.filter(name='Skip AE', is_active=True).exists()
     return render(request, 'editor_in_chief.html', {'submissions': submissions, 'ae_assignments': ae_assignments, 'decisions': decisions, 'ae_assignment': ae_assignment, 'skip_ae': skip_ae})
 
+@user_passes_test(is_eic)
 def eic_review_manuscripts(request):
+    eic = User.objects.get(username=request.user.username)
+    eic_editor = Editor.objects.get(user=eic)
+    # Get the journals associated with the EIC
+    journals = Journal_Editor_Assignment.objects.filter(editor=eic_editor).values_list('journal', flat=True)
     # Submissions with status "Awaiting for EIC Review"
-    submissions_eic = Submission.objects.filter(article_status__article_status='Awaiting for EIC Review')
+    submissions_eic = Submission.objects.filter(article_status__article_status='Awaiting for EIC Review', journal__in=journals)
 
     # Submissions with invitations sent by request.user and status "Awaiting for Reviewers"
     reviewer_invitations = Reviewer_Invitation.objects.filter(
         invite_by=request.user,
-        submission__article_status__article_status='Awaiting for Reviewers'
+        submission__article_status__article_status='Awaiting for Reviewers',
+        submission__journal__in=journals
     ).select_related('submission')
 
     # Extract the related submissions from reviewer invitations
@@ -1780,10 +1786,13 @@ def accept_invitation(request):
 
             # AE (editor) assigned mail
             try:
-                ae_assignment = AE_Assignment.objects.get(submission=submission)
-                editor = ae_assignment.user
                 if Modes.objects.filter(name="Skip AE",is_active=True):
-                    editor = invitation.invite_by.user
+                    editor = invitation.invite_by
+                    # print(f"Editor (AE) assigned: {editor.user},{editor.user.email}")
+                else:
+                    ae_assignment = AE_Assignment.objects.get(submission=submission)
+                    editor = ae_assignment.user
+                
             except AE_Assignment.DoesNotExist:
                 editor = None
                 logger.error("No AE (editor) assigned to this submission.")
@@ -1835,10 +1844,12 @@ def reject_invitation(request):
         invitation.delete()
         submission = invitation.submission
         try:
-            ae_assignment = AE_Assignment.objects.get(submission=submission)
-            editor = ae_assignment.user
             if Modes.objects.filter(name="Skip AE",is_active=True):
-                    editor = invitation.invite_by.user
+                editor = invitation.invite_by
+            else:
+                ae_assignment = AE_Assignment.objects.get(submission=submission)
+                editor = ae_assignment.user
+            
         except AE_Assignment.DoesNotExist:
             editor = None
             logger.error("No AE (editor) assigned to this submission.")
@@ -1954,10 +1965,12 @@ def submit_review_comments(request):
             submission = Submission.objects.get(id=submission_id)
             invitation = Reviewer_Invitation.objects.get(submission=submission, user=user.user)
             try:
-                ae_assignment = AE_Assignment.objects.get(submission=submission)
-                editor = ae_assignment.user
                 if Modes.objects.filter(name="Skip AE",is_active=True):
-                    editor = invitation.invite_by.user
+                    editor = invitation.invite_by
+                else:
+                    ae_assignment = AE_Assignment.objects.get(submission=submission)
+                    editor = ae_assignment.user
+                
             except AE_Assignment.DoesNotExist:
                 editor = None
                 logger.error("No AE (editor) assigned to this submission.")
@@ -2036,14 +2049,12 @@ def associate_editor(request):
 
 
 @login_required
-@user_passes_test(is_ae)
+# @user_passes_test(is_ae)
 def get_reviewers(request):
     submission_id = request.GET.get('submission_id')
     submission = get_object_or_404(Submission, id=submission_id)
     specialization_id = submission.specialization.id  # Assuming submission.specialization is a FK
-    print("Specialization ID:", specialization_id)
     reviewers = User.objects.filter(reviewer_specialization__specialization__id=specialization_id).distinct()
-    print("Reviewers found:", reviewers.count())
     reviewers_data = [{'id': r.id, 'name': r.get_full_name()} for r in reviewers]
     return JsonResponse({'reviewers': reviewers_data})
 
