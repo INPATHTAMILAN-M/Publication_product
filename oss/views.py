@@ -891,8 +891,15 @@ def admin_office_view(request):
     paginator = Paginator(submission, 20)  # Show 10 submissions per page
     page_number = request.GET.get('page')
     submissions = paginator.get_page(page_number)
-    
-    return render(request, 'admin_office.html', {'submissions': submissions, 'editors': editors, 'journals': journals})
+    skip_ae = Modes.objects.filter(name='Skip AE', is_active=True).exists()
+    return render(request, 'admin_office.html', {'submissions': submissions, 'editors': editors, 'journals': journals, 'skip_ae': skip_ae})
+
+def move_to_eic(request, submission_id):
+    submission = get_object_or_404(Submission, id=submission_id)
+    eic_status = get_object_or_404(Article_Status, article_status="Awaiting for EIC Review")
+    submission.article_status = eic_status
+    submission.save()
+    return redirect('admin_office')
 
 from django.contrib import messages
 
@@ -1524,9 +1531,37 @@ def Editor_in_Chief(request):
     submissions = paginator.get_page(page_number)
 
     ae_assignment = AE_Assignment.objects.select_related('user').filter(submission__in=submissions)
+    skip_ae = Modes.objects.filter(name='Skip AE', is_active=True).exists()
+    return render(request, 'editor_in_chief.html', {'submissions': submissions, 'ae_assignments': ae_assignments, 'decisions': decisions, 'ae_assignment': ae_assignment, 'skip_ae': skip_ae})
 
-    return render(request, 'editor_in_chief.html', {'submissions': submissions, 'ae_assignments': ae_assignments, 'decisions': decisions, 'ae_assignment': ae_assignment})
+def eic_review_manuscripts(request):
+    # Submissions with status "Awaiting for EIC Review"
+    submissions_eic = Submission.objects.filter(article_status__article_status='Awaiting for EIC Review')
 
+    # Submissions with invitations sent by request.user and status "Awaiting for Reviewers"
+    reviewer_invitations = Reviewer_Invitation.objects.filter(
+        invite_by=request.user,
+        submission__article_status__article_status='Awaiting for Reviewers'
+    ).select_related('submission')
+
+    # Extract the related submissions from reviewer invitations
+    submissions_reviewers = Submission.objects.filter(id__in=[inv.submission.id for inv in reviewer_invitations])
+
+    # Combine both querysets (remove duplicates if any)
+    combined_submissions = submissions_eic.union(submissions_reviewers)
+
+    # Pagination
+    paginator = Paginator(combined_submissions, 20)
+    page_number = request.GET.get('page')
+    submissions = paginator.get_page(page_number)
+
+    specializations = Specialization.objects.all()
+
+    context = {
+        'submissions': submissions,
+        'specializations': specializations,
+    }
+    return render(request, 'eic_review_manuscripts.html', context)
 
 @login_required
 @user_passes_test(is_eic)
@@ -1747,6 +1782,8 @@ def accept_invitation(request):
             try:
                 ae_assignment = AE_Assignment.objects.get(submission=submission)
                 editor = ae_assignment.user
+                if Modes.objects.filter(name="Skip AE",is_active=True):
+                    editor = invitation.invite_by.user
             except AE_Assignment.DoesNotExist:
                 editor = None
                 logger.error("No AE (editor) assigned to this submission.")
@@ -1800,6 +1837,8 @@ def reject_invitation(request):
         try:
             ae_assignment = AE_Assignment.objects.get(submission=submission)
             editor = ae_assignment.user
+            if Modes.objects.filter(name="Skip AE",is_active=True):
+                    editor = invitation.invite_by.user
         except AE_Assignment.DoesNotExist:
             editor = None
             logger.error("No AE (editor) assigned to this submission.")
@@ -1913,9 +1952,12 @@ def submit_review_comments(request):
             submission_reviewer.request_status=Request_Status.objects.get(request_status='Submitted')
             submission_reviewer.save()
             submission = Submission.objects.get(id=submission_id)
+            invitation = Reviewer_Invitation.objects.get(submission=submission, user=user.user)
             try:
                 ae_assignment = AE_Assignment.objects.get(submission=submission)
                 editor = ae_assignment.user
+                if Modes.objects.filter(name="Skip AE",is_active=True):
+                    editor = invitation.invite_by.user
             except AE_Assignment.DoesNotExist:
                 editor = None
                 logger.error("No AE (editor) assigned to this submission.")
@@ -1943,7 +1985,7 @@ def submit_review_comments(request):
                 )
             # submission = Submission.objects.get(id=submission_id)
             # submission.article_status = Article_Status.objects.get(article_status='Awaiting AE Recommendation')
-                 # Check if all Submission_Reviewer entries for this submission are complete
+                # Check if all Submission_Reviewer entries for this submission are complete
             all_reviews_completed = Submission_Reviewer.objects.filter(submission_id=submission_id).exclude(completion_on=None).count()
             total_reviews = Submission_Reviewer.objects.filter(submission_id=submission_id).count()
             submission = Submission.objects.get(id=submission_id)
@@ -1951,17 +1993,16 @@ def submit_review_comments(request):
                 # Update the submission status if all reviews are complete
                 # submission = Submission.objects.get(id=submission_id)
                 submission.article_status = Article_Status.objects.get(article_status='Awaiting AE Recommendation')
-                
+                if Modes.objects.filter(name="Skip AE",is_active=True):
+                    submission.article_status = Article_Status.objects.get(article_status='Awaiting for EIC Decision')
             submission.decissioned_on = timezone.now()
             submission.decision_by = request.user
             submission.save()
-            return redirect('manuscripts_to_review')  # Changed to redirect for better UX
+            return redirect('manuscripts_to_review') 
         else:
             return HttpResponseBadRequest("Invalid submission ID.")
     
     return HttpResponseNotAllowed("Method not allowed.")
-
-
 
 # ---------------Manuscripts reviewed--------------------------------------------------------------------------------------------------------------------------------------------------------------
 @login_required
@@ -2000,8 +2041,9 @@ def get_reviewers(request):
     submission_id = request.GET.get('submission_id')
     submission = get_object_or_404(Submission, id=submission_id)
     specialization_id = submission.specialization.id  # Assuming submission.specialization is a FK
-
+    print("Specialization ID:", specialization_id)
     reviewers = User.objects.filter(reviewer_specialization__specialization__id=specialization_id).distinct()
+    print("Reviewers found:", reviewers.count())
     reviewers_data = [{'id': r.id, 'name': r.get_full_name()} for r in reviewers]
     return JsonResponse({'reviewers': reviewers_data})
 
@@ -2033,7 +2075,8 @@ def send_invitation(request):
                     user=reviewer,
                     submission=submission,
                     invite_status='R',
-                    expiring_date=timezone.now() + timedelta(days=due_days)
+                    expiring_date=timezone.now() + timedelta(days=due_days),
+                    invite_by = request.user
                 )
                 date=timezone.now() + timedelta(days=due_days)
                 # Send email

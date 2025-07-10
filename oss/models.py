@@ -151,7 +151,8 @@ class Reviewer_Invitation(models.Model):
     submission = models.ForeignKey(Submission, on_delete=models.CASCADE)
     date = models.DateField(auto_now_add=True)
     expiring_date = models.DateField()
-
+    invite_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='invite_by', null=True, blank=True)
+    
     def __str__(self):
         return f"{self.user.first_name} - {self.submission.title}"
 

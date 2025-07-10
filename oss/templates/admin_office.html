@@ -100,9 +100,18 @@
                                 <td>
                                     
                                     <button class="btn btn-danger btn-sm btn-custom" data-bs-toggle="modal" data-bs-target="#rejectModal" data-manuscript-id="{{ submission.id }}" data-admin-comments="{{ submission.admin_comments }}">Reject</button>
-                                    <button class="btn btn-primary btn-sm btn-custom" data-bs-toggle="modal" data-bs-target="#moveToAEModal" data-manuscript-id="{{ submission.id }}">Assign AE</button><br>
+                                    {% if skip_ae %}
+                                        <form method="post" action="{% url 'move_to_eic' submission.id %}" style="display:inline;">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-primary btn-sm btn-custom" data-manuscript-id="{{ submission.id }}">
+                                                Move EIC
+                                            </button>
+                                        </form><br>
+                                    {% else %}
+                                        <button class="btn btn-primary btn-sm btn-custom" data-bs-toggle="modal" data-bs-target="#moveToAEModal" data-manuscript-id="{{ submission.id }}">Assign AE</button><br>
+                                    {% endif %}
                                     <p><a href="{% url 'contact_form' %}?email={{ submission.author.user.email }}" class="contact-link small" target="_blank" onclick="window.open(this.href, '_blank', 'width=600,height=600'); return false;">Contact Author</a></p>
-     
+                                    
                                 </td>
                                 <!-- <td>{{ submission.journal }}</td>  -->
                                 <td>

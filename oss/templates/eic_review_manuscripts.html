@@ -1,0 +1,434 @@
+<!-- associate_editor.html -->
+
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+<section class="job-list-section pt-60 pb-60">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="about-information-sticky">
+                    <ul>
+                        <li>
+                            <a class="nav-link active" href="{% url 'eic_review_manuscripts' %}">
+                                Manuscripts to Review
+                            </a>
+                        </li>
+                        <li>
+                            <a class="nav-link" href="{% url 'editor_in_chief' %}">
+                                Manuscripts waiting for decision
+                            </a>
+                        </li>
+                        <li>
+                            <a class="nav-link" href="{% url 'decisioned_manuscripts' %}">
+                                Manuscripts decisioned
+                            </a>
+                        </li>
+                        <li>
+                            <a class="nav-link" href="{% url 'analytical_feedback' %}">
+                                Analytical Feedbacks
+                            </a>
+                        </li>
+                        <li>
+                            <a class="nav-link" href="{% url 'feedback_list' %}">
+                                Feedbacks
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-md-9 ms-sm-auto col-lg-9 px-md-4">
+                
+                    <div class="content">
+                        <h2>Manuscripts to Review</h2>
+                        <div class=”table-responsive”>  
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr> 
+                                        <th scope="col">Manuscript ID</th>
+                                        <th scope="col" width="18%">Title</th>
+                                        <th scope="col">Author</th>
+                                        <th scope="col">Reviewers</th>
+                                        <th scope="col">Expiry Date</th>
+                                        <th scope="col">Plagiarism Report</th>
+                                        <th scope="col">File</th>
+                                        <th scope="col">Submitted on</th>
+                                        <th scope="col">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for submission in submissions %}
+                                    <tr>
+                                        <td>{{ submission.manuscript_id }}</td>
+                                        <td>{{ submission.title }}</td>
+                                        <td>{{ submission.author.user.get_full_name }}</td>
+                                        <td>                             
+                                            {% for invitation in submission.reviewer_invitation_set.all %}
+                                                {% if invitation.invite_status == 'R' %}
+                                                <p>{{ invitation.user.first_name }} <a href="#" class="cancel-invite" data-id="{{ invitation.id }}" data-submission-id="{{ submission.id }}">(Remove)</a></p>
+                                                {% else %}
+                                                    <p>{{ invitation.user.first_name }} {{ invitation.user.last_name }} ({{ invitation.get_invite_status_display }})</p>
+                                                {% endif %}
+                                                
+                                            {% endfor %}
+                                            <p><a href="#" class="invite-link" data-id="{{ submission.id }}">Invite</a></p>
+                                            
+                                        </td>
+                                        <td>
+                                            {% if submission.reviewer_invitation_set.all %}
+                                                {% for invite in submission.reviewer_invitation_set.all %}
+                                                    {% if invite.submission.id == submission.id %}
+                                                        {{ invite.expiring_date }}
+                                                    {% endif %}
+                                                {% endfor %}
+                                            {% else %}
+                                                --
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if submission.plag_report %}
+                                                <a href="{{ submission.plag_report.url }}" 
+                                                onclick="window.open(this.href, '_blank', 'toolbar=0,scrollbars=1,resizable=1,width=800,height=600'); return false;">
+                                                View Report
+                                                </a>
+                                            {% else %}
+                                                No Report
+                                            {% endif %}
+                                        </td>
+                                        
+                                        <td>
+                                            {% if submission.final_file %}
+                                                <a href="{{ submission.final_file.url }}" onclick="window.open(this.href, '_blank', 'toolbar=0,scrollbars=1,resizable=1,width=800,height=600'); return false;">View PDF</a>
+                                            {% else %}
+                                                --
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ submission.submitted_on }}</td>
+                                        
+                                        <td>
+                                            <button class="btn btn-danger btn-sm btn-custom" data-bs-toggle="modal" data-bs-target="#rejectModal" data-manuscript-id="{{ submission.id }}" data-admin-comments="{{ submission.admin_comments }}">Reject</button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <!-- Pagination controls -->
+                        <div class="row pagination text-center">
+                            <span class="step-links">
+                                {% if submissions.has_previous %}
+                                    <a href="?page=1">&laquo; first</a>
+                                    <a href="?page={{ submissions.previous_page_number }}">previous</a>
+                                {% endif %}
+        
+                                <span class="current">
+                                    Page {{ submissions.number }} of {{ submissions.paginator.num_pages }}
+                                </span>
+        
+                                {% if submissions.has_next %}
+                                    <a href="?page={{ submissions.next_page_number }}">next</a>
+                                    <a href="?page={{ submissions.paginator.num_pages }}">last &raquo;</a>
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
+              
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Reject Modal -->
+
+
+<div class="modal fade" id="rejectModal" tabindex="-1" aria-labelledby="rejectModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="rejectModalLabel">Reject Manuscript</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="rejectForm">
+                    <input type="hidden" id="rejectManuscriptId" name="manuscript_id">
+                    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                    <div class="mb-3">
+                        <label for="adminComments" class="form-label">Comments</label>
+                        <textarea class="form-control" id="adminComments" name="admin_comments" rows="3"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-success">Submit</button>
+                    <div id="pleaseWaitMessage" style="display:none;">Please Wait...</div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- Invite Modal -->
+<div class="modal fade" id="inviteModal" tabindex="-1" role="dialog" aria-labelledby="inviteModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="inviteModalLabel">Invite Reviewers</h5>
+                <button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="inviteForm">
+                    {% csrf_token %}
+                    <input type="hidden" id="submissionId" name="submission_id">
+                    
+                    <!-- Removed specialization select -->
+
+                    <div class="form-group" id="reviewersContainer" style="display:none;">
+                        <label for="reviewers">Reviewers</label>
+                        <div id="reviewersList"></div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Send Invitation</button>
+                </form>
+                <div id="loadingMessage" style="display:none;">Processing...</div>
+            </div>
+        </div> 
+    </div>
+</div>
+
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+
+<script src="{% static 'ckeditor/ckeditor/ckeditor.js' %}"></script>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<!-- JavaScript for Modals and AJAX Requests -->
+<script>
+// handle reject
+
+    // reject
+    document.addEventListener('DOMContentLoaded', function () {
+    var rejectModal = document.getElementById('rejectModal');
+    rejectModal.addEventListener('show.bs.modal', function (event) {
+        var button = event.relatedTarget;
+        var manuscriptId = button.getAttribute('data-manuscript-id');
+        var adminComments = button.getAttribute('data-admin-comments');
+        document.getElementById('rejectManuscriptId').value = manuscriptId;
+        document.getElementById('adminComments').value = adminComments;
+    });
+
+    document.getElementById('rejectForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        this.disabled = true;
+        // Show the "Please Wait..." message
+        document.getElementById('pleaseWaitMessage').style.display = 'block';
+        var manuscriptId = document.getElementById('rejectManuscriptId').value;
+        var adminComments = CKEDITOR.instances['adminComments'].getData();
+
+        // Create a temporary div to use the browser's built-in HTML parser
+        var tempDiv = document.createElement("div");
+        tempDiv.innerHTML = adminComments;
+        var plainText = tempDiv.textContent || tempDiv.innerText || "";
+        // Show loading message
+        $('#loadingMessage').show();
+        fetch(`/reject_manuscript/${manuscriptId}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({ admin_comments: plainText })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                // Hide loading message
+                $('#loadingMessage').hide();
+                location.reload();
+            } else {
+                alert('Failed to reject manuscript: ' + data.error);
+            }
+        })
+        .catch(error => {
+            // Hide loading message
+            $('#loadingMessage').hide();
+            console.error('Error:', error);
+            alert('An error occurred: ' + error.message);
+        });
+    });
+
+    CKEDITOR.replace('adminComments');
+    
+});
+
+// Handle cancel invite link click
+    $(document).ready(function() {
+        // Handle invite link click
+        $('.invite-link').on('click', function(e) {
+            e.preventDefault();
+            var submissionId = $(this).data('id');
+            $('#submissionId').val(submissionId);
+            $('#inviteModal').modal('show');
+        });
+
+        // Handle specialization change
+        $(document).ready(function() {
+        $('.invite-link').on('click', function(e) {
+            e.preventDefault();
+            var submissionId = $(this).data('id');
+            $('#submissionId').val(submissionId);
+            $('#reviewersList').empty();
+            $('#reviewersContainer').hide();
+
+            // Fetch reviewers for submission's specialization
+            $.ajax({
+                url: "{% url 'get_reviewers' %}",
+                data: { 'submission_id': submissionId },
+                
+                success: function(data) {
+                    var reviewersContainer = $('#reviewersContainer');
+                    var reviewersList = $('#reviewersList');
+                    reviewersList.empty();
+                    console.log("Fetching reviewers for submission ID:", submissionId);
+                    if (data.reviewers.length > 0) {
+                        data.reviewers.forEach(function(reviewer) {
+                            reviewersList.append(
+                                '<div class="form-check">' +
+                                '<input class="form-check-input" type="checkbox" value="' + reviewer.id + '" id="reviewer' + reviewer.id + '" name="reviewers">' +
+                                '<label class="form-check-label" for="reviewer' + reviewer.id + '">' + reviewer.name + '</label>' +
+                                '</div>'
+                            );
+                        });
+                        reviewersContainer.show();
+                    } else {
+                        reviewersContainer.hide();
+                    }
+                    $('#inviteModal').modal('show');
+                }
+            });
+        });
+    });
+
+
+    // Handle send invitation form submission
+    $('#inviteForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        var submissionId = $('#submissionId').val();
+        var selectedReviewerIds = [];
+
+        $('input[name="reviewers"]:checked').each(function() {
+            selectedReviewerIds.push($(this).val());
+        });
+
+        if (selectedReviewerIds.length === 0) {
+            alert('Please select at least one reviewer.');
+            return;
+        }
+
+        var formData = {
+            submission_id: submissionId,
+            reviewers: selectedReviewerIds
+        };
+        // Show loading message
+        $('#loadingMessage').show();
+
+        $.ajax({
+            type: 'POST',
+            url: '{% url "send_invitation" %}',
+            contentType: 'application/json',
+            data: JSON.stringify(formData),
+            beforeSend: function(xhr, settings) {
+                xhr.setRequestHeader("X-CSRFToken", getCookie("csrftoken"));
+            },
+            success: function(response) {
+                // Hide loading message
+                $('#loadingMessage').hide();
+
+                if (response.success) {
+                    alert('Invitations sent successfully!');
+                    $('#inviteModal').modal('hide');
+                    location.reload(); // Optionally reload the page or update the DOM
+                } else {
+                    alert('Error sending invitations: ' + response.error);
+                }
+            },
+            error: function(xhr, status, error) {
+                // Hide loading message
+                $('#loadingMessage').hide();
+
+                console.error('AJAX Error: ', status, error);
+                alert('Error sending invitations.');
+            }
+        });
+    });
+
+    function getCookie(name) {
+        var cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+});
+
+    // Function to handle reviewer checkboxes
+    $('#specialization-select').on('change', function() {
+        var specializationId = $(this).val();
+        var url = '/get_reviewers/?specialization=' + specializationId;
+
+        $.ajax({
+            type: 'GET',
+            url: url,
+            success: function(response) {
+                var checkboxes = '';
+                response.reviewers.forEach(function(reviewer) {
+                    checkboxes += '<label><input type="checkbox" name="reviewers" value="' + reviewer.id + '"> ' + reviewer.name + '</label><br>';
+                });
+                $('#reviewer-checkboxes').html(checkboxes);
+            },
+            error: function(xhr, status, error) {
+                console.error('AJAX Error: ', status, error);
+                alert('Error loading reviewers');
+            }
+        });
+    });
+
+
+        // Handle cancel invite link click
+        $(document).on('click', '.cancel-invite', function(e) {
+            e.preventDefault();
+            var inviteId = $(this).data('id');
+            var submissionId = $(this).data('submission-id');
+            $.ajax({
+                type: 'POST',
+                url: "{% url 'cancel_invitation' %}",
+                data: {
+                    'invite_id': inviteId,
+                    'submission_id': submissionId,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                },
+                success: function(response) {
+                    // Update the table row to remove the canceled invitation
+                    // You can refresh the part of the table here if needed
+                    location.reload();
+                }
+            });
+        });
+
+
+</script>
+
+
+{% endblock %}

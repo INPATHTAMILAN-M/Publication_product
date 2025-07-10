@@ -287,7 +287,7 @@ def update_user_groups(request):
     for group_id in groups:
         group = get_object_or_404(Group, id=group_id)
         user.groups.add(group)
-        author_id = Author.objects.get(user=user)
+        author_id = Author.objects.get(user=user) if Author.objects.filter(user=user).exists() else None
         if author_id is None:
             if group.name == 'Reviewer':
                 Author.objects.create(
@@ -330,7 +330,8 @@ def update_user_groups(request):
                             context={'user': old_admin}                            
                         )
                     old_admin.groups.remove(admin_group)
-            
+        
+    
     # Send email with all assigned roles
     if assigned_groups:
         if Modes.objects.filter(name="Email",is_active=True):
@@ -454,22 +455,33 @@ def assign_journal(request):
     if request.method == 'POST':
         username = request.POST.get('username')
         journal_id = request.POST.get('journal_id')
+
         if not username or not journal_id:
             return JsonResponse({'success': False, 'error': 'Username or Journal ID is missing.'})
+
         try:
-            # Get the User object based on the username
             user = get_object_or_404(User, username=username)
-            # Get the Journal object based on the journal_id
             journal = get_object_or_404(Journal, id=journal_id)
-            # Get or create the Editor object associated with the User
             editor, created = Editor.objects.get_or_create(user=user)
-            # Remove existing journal assignments for the editor
-            Journal_Editor_Assignment.objects.filter(editor=editor).delete()
-            # delete the editor for the journal
-            old_editor_journal = Journal_Editor_Assignment.objects.filter(journal=journal).delete()
-             # Assign the selected journal to the editor
+
+            # Check if user is Editor-in-Chief
+            if editor.user.groups.filter(name='EIC').exists():
+                # 1. Remove any existing journal from this EIC
+                Journal_Editor_Assignment.objects.filter(editor=editor).delete()
+
+                # 2. Remove any existing EIC assignment from this journal
+                existing_assignments = Journal_Editor_Assignment.objects.filter(journal=journal)
+                for assignment in existing_assignments:
+                    if assignment.editor.user.groups.filter(name='EIC').exists():
+                        assignment.delete()
+
+            else:
+                # For non-EICs: just remove existing assignments to this journal by the same user
+                Journal_Editor_Assignment.objects.filter(editor=editor, journal=journal).delete()
+
+            # Assign journal to the editor
             Journal_Editor_Assignment.objects.create(journal=journal, editor=editor)
-            
+
             verification_link = f"{settings.SITE_URL}{reverse('login')}"
             
             context = {
