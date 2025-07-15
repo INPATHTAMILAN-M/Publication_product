@@ -95,3 +95,11 @@ class FeedbackResponse(models.Model):
 
     def __str__(self):
         return f"Response for Ques: {self.question.question[:50]} by User: {self.feedback.user.username}"
+# models.py
+class LatexDocument(models.Model):
+    title = models.CharField(max_length=100)
+    tex_file = models.FileField(upload_to='latex_docs/')
+    is_active = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.title

@@ -406,7 +406,7 @@ def generate_manuscript_id(request=None, submission=None):
         new_number = 1
 
     # Format the new manuscript_id with 'K' before the journal title
-    manuscript_id = f"K{journal.title}-{current_year}-{str(current_month).zfill(2)}-{new_number}"
+    manuscript_id = f"{journal.title}-{current_year}-{str(current_month).zfill(2)}-{new_number}"
 
     return manuscript_id
 
@@ -966,7 +966,7 @@ def assign_ae(request, submission_id):
                         to_email=editor.email,
                         subject='Manuscript Assigned',
                         template_name='email_templates/ae_assigned.html',
-                        user=editor.user,
+                        user=editor,
                         context={
                             'submission': submission,
                             'editor': editor,
