@@ -34,7 +34,10 @@ from account.converter import text_to_latex
 from django.core.files.storage import FileSystemStorage
 from django.core.files import File
 import traceback
-
+from django.http import JsonResponse
+from account.models import LatexDocument
+from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_exempt 
 
 # -----------------------------------------------------------------------------Submission Flow------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1295,55 +1298,19 @@ def Setting_proof(request):
     paginator = Paginator(submissions, 20)  # Show 10 submissions per page
     page_number = request.GET.get('page')
     submissions = paginator.get_page(page_number)
-    return render(request, 'setting_proof.html', {'submissions': submissions})
+    documents = LatexDocument.objects.all()
+    active_doc = documents.filter(is_active=True).first()
 
-# def upload_typeset_document(request):
-#     if request.method == 'POST' and request.headers.get('x-requested-with') == 'XMLHttpRequest':
-#         submission_id = request.POST.get('submission_id')
-#         typeset_file = request.FILES.get('typeset_file')
-
-#         if not submission_id or not typeset_file:
-#             return JsonResponse({'success': False, 'error': 'Missing submission ID or file'})
-
-#         submission = get_object_or_404(Submission, manuscript_id=submission_id)
-#         accepted_submission, created = Accepted_Submission.objects.get_or_create(submission=submission)
-#         accepted_submission.typeset_file = typeset_file
-#         accepted_submission.typeset_on = now()
-#         accepted_submission.save()
-#         submission.article_status = Article_Status.objects.get(article_status='Awaiting for Proof Read')
-#         journal = submission.journal  
-#         date_obj = Date.objects.get(journal=journal)
-#         due_days = date_obj.due_days_to_typeset_approval
-#         submission.typeset_due_date=timezone.now().date() + timedelta(days=due_days)
-#         submission.save()
-
-#         # Send email to the author
-#         author_email = submission.author.email  # Assumes Submission model has an author field with an email attribute
-#         subject = 'Your Manuscript Type Set Document'
-#         message = 'Please check the attached type set document for your manuscript.'
-
-#         try:
-#             email = EmailMessage(
-#                 subject=subject,
-#                 body=message,
-#                 from_email=settings.DEFAULT_FROM_EMAIL,
-#                 to=[author_email]
-#             )
-#             email.attach(typeset_file.name, typeset_file.read(), typeset_file.content_type)
-#             email.send()
-            
-#         except Exception as e:
-#             return JsonResponse({'success': False, 'error': str(e)})
-
-#         return JsonResponse({'success': True})
-
-#     return JsonResponse({'success': False, 'error': 'Invalid request'})
+    return render(request, 'setting_proof.html', {'submissions': submissions,"documents": documents, "active_doc_id": active_doc.id if active_doc else None})
 
 def upload_typeset_document(request):
     if request.method == 'POST' and request.headers.get('x-requested-with') == 'XMLHttpRequest':
         submission_id = request.POST.get('submission_id')
         typeset_file = request.FILES.get('typeset_file')
-
+        document_type_id = request.POST.get('document_type')
+        LatexDocument.objects.update(is_active=False)
+        LatexDocument.objects.filter(id=document_type_id).update(is_active=True)
+        
         if not submission_id or not typeset_file:
             return JsonResponse({'success': False, 'error': 'Missing submission ID or file'})
 
@@ -1454,6 +1421,9 @@ def upload_typeset_document(request):
             return JsonResponse({'success': False, 'error': f"Internal error: {str(e)}"})
 
     return JsonResponse({'success': False, 'error': 'Invalid request'})
+ # or use CSRF token
+
+
 
 def view_typeset_document(request, submission_id):
     accepted_submission = get_object_or_404(Accepted_Submission, submission__id=submission_id)

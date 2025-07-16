@@ -68,7 +68,7 @@ urlpatterns = [
     path('download/<int:article_id>/', download_article, name='download_article'),
     
     # path('upload-docx/', convert_docx_to_pdf, name='convert_docx'),
-    path('upload/', upload_file, name='upload'),
+    # path('upload/', upload_file, name='upload'),
     path('compile-pdf/', compile_pdf, name='compile_pdf'),
     
     path('send_whatsapp/', send_message_view, name='send_whatsapp'),
