@@ -1220,7 +1220,7 @@ from django.http import FileResponse, JsonResponse
 from django.core.files.storage import FileSystemStorage
 from .forms import DocumentForm
 from .extractors import extract_docx, extract_pdf
-from .converter import text_to_latex
+from .converter import text_to_latex 
 
 
 def upload_file(request):
@@ -1233,36 +1233,36 @@ def upload_file(request):
             filename = fs.save(file.name, file)
             filepath = fs.path(filename)
 
-            # Extract text based on file type
-            if file.name.endswith('.docx'):
-                text = extract_docx(filepath)
-            elif file.name.endswith('.pdf'):
-                
-                text = extract_pdf(filepath)
-                
-            else:
-                text = file.read().decode('utf-8')
+            extracted_content = None
 
-            print("Extracted text:\n", text)  # Debug output
-            # Clean and normalize the text
-            text = text.strip()
-            text = re.sub(r'\n{3,}', '\n\n', text)  # Remove extra blank lines
-            
-            latex_code = text_to_latex(text)
+            # Extract structured content based on file type
+            if file.name.endswith('.docx'):
+                extracted_content = extract_docx(filepath)
+            elif file.name.endswith('.pdf'):
+                extracted_content = extract_pdf(filepath)
+            else:
+                raw_text = file.read().decode('utf-8')
+                extracted_content = {
+                    "metadata": {},
+                    "body": [{"type": "paragraph", "text": raw_text}],
+                    "references": [],
+                    "tables": []
+                }
+
             os.remove(filepath)
-            
-            # Debug output
-            print("Final LaTeX output:\n", latex_code)
-            
+
+            extracted_json = json.dumps(extracted_content, indent=2)
+            latex_code = text_to_latex(extracted_content)
+
             return render(request, 'review.html', {
                 'latex_code': latex_code,
                 'filename': file.name,
-                'extracted_text': text,
+                'extracted_text': extracted_json,
             })
+
     else:
         form = DocumentForm()
     return render(request, 'upload.html', {'form': form})
-
 
 def compile_pdf(request):
     if request.method == 'POST':

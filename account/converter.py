@@ -1,270 +1,218 @@
 import re
+from typing import Dict, List, Any
+from jinja2 import Template
+from io import TextIOWrapper
+from django.core.exceptions import ObjectDoesNotExist
+from .models import LatexDocument
 
-def escape_latex(text):
-    replace_map = {
-        '&': r'\&',
-        '%': r'\%',
-        '$': r'\$',
-        '#': r'\#',
-        '_': r'\_',
-        '{': r'\{',
-        '}': r'\}',
-        '~': r'\textasciitilde{}',
-        '^': r'\textasciicircum{}',
-        '\\': r'\textbackslash{}',
-    }
-    regex = re.compile('|'.join(re.escape(key) for key in replace_map.keys()))
-    return regex.sub(lambda match: replace_map[match.group()], text)
+class LatexConverter:
+    def __init__(self, template_key, template_content=None):
+        self.template_key = template_key
+        self.template_text = template_content or self.default_template()
 
-def convert_text_to_ieee_latex(input_text):
-    lines = input_text.splitlines()
-    n = len(lines)
-    i = 0
-    latex = []
+    def convert(self, extracted_data: dict) -> str:
+        filled_data = self.prepare_template_data(extracted_data)
+        template = Template(self.template_text)
+        return template.render(**filled_data)
 
-    # Preamble
-    latex.append(r"\documentclass[conference]{IEEEtran}")
-    latex.append(r"\IEEEoverridecommandlockouts")
-    latex.append(r"\usepackage{cite,amsmath,amssymb,amsfonts,algorithmic,graphicx,textcomp,xcolor}")
-    latex.append(r"\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em"
-                 r"T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}")
-    latex.append("")
-
-    # Title (first line)
-    title = lines[i].strip()
-    latex.append(r"\title{" + escape_latex(title) + "}")
-    i += 1
-
-    # Parse authors block until first section or empty line after authors
-    author_lines = []
-    while i < n:
-        line = lines[i].strip()
-        if not line:
-            i += 1
-            continue
-        if re.match(r"^\d+\.", line) or line.lower() in ["introduction", "applications", "conclusion", "contact"]:
-            break
-        author_lines.append(line)
-        i += 1
-
-    # Break authors on email lines
-    author_blocks = []
-    block = []
-    for line in author_lines:
-        block.append(line)
-        if "@" in line:
-            author_blocks.append(block)
-            block = []
-    if block:
-        author_blocks.append(block)
-
-    def parse_author_block(block):
-        # The first line contains full name and role
-        roles = ["Associate Professor", "Assistant Professor", "Professor"]
-        line = block[0]
-
-        role_found = ""
-        name = line
-        for r in roles:
-            if r in line:
-                role_found = r
-                idx = line.find(r)
-                name = line[:idx].strip()
-                break
-
-        email = ""
-        dept_inst = []
-        for l in block[1:]:
-            if "@" in l:
-                email = l.strip()
-            else:
-                dept_inst.append(l.strip())
-
-        department = ""
-        institution = ""
-        if dept_inst:
-            department = dept_inst[0]
-            if len(dept_inst) > 1:
-                institution = " ".join(dept_inst[1:])
+    def prepare_template_data(self, data: dict) -> dict:
+        metadata = data.get("metadata", {})
+        body = data.get("body", [])
+        references = data.get("references", [])
+        tables = data.get("tables", [])
 
         return {
-            "name": name,
-            "role": role_found,
-            "department": department,
-            "institution": institution,
-            "email": email,
+            "title": metadata.get("title", "Untitled"),
+            "short_title": metadata.get("title", "Untitled")[:30],
+            "abstract": metadata.get("abstract", ""),
+            "keywords": ', '.join(metadata.get("keywords", [])),
+            "author_block": self.format_authors(metadata.get("authors", [])),
+            "credit_roles": self.format_roles(metadata.get("authors", [])),
+            "content": self.format_body(body),
+            "bibliography": self.format_references(references),
+            "non_technical_summary": "",
+            "acknowledgements": "",
+            "data_availability": "",
+            "competing_interests": "",
+            "methods_content": "",
+            "doi": "",
+            "editor_name": "",
+            "received_date": "",
+            "accepted_date": "",
+            "published_date": "",
+            "year": "2025",
+            "volume": "1",
+            "paper_number": "001",
+            "bib_file": "references.bib"
         }
 
-    authors = [parse_author_block(b) for b in author_blocks]
+    def format_authors(self, authors):
+        if not authors:
+            return "Unknown Author"
+        author_lines = []
+        address_lines = []
+        affil_map = {}
+        for idx, author in enumerate(authors):
+            affil = author.get('affiliation', 'Unknown Institute')
+            affil_key = affil_map.setdefault(affil, len(affil_map) + 1)
+            author_lines.append(f"\\author[inst{affil_key}]{{{author.get('name', 'Unknown')}}}")
+        for affil, num in affil_map.items():
+            address_lines.append(f"\\address[inst{num}]{{{affil}}}")
+        return '\n'.join(author_lines + address_lines)
+    
+    def format_roles(self, authors):
+        roles = []
+        for author in authors:
+            if author.get("role"):
+                roles.append(f"{author['name']} ({author['role']})")
+        return '\\\\'.join(roles)
 
-    latex.append(r"\author{")
-    for idx, a in enumerate(authors):
-        name_line = escape_latex(a["name"])
-        if a["role"]:
-            name_line += " " + escape_latex(a["role"])
-        latex.append(r"\IEEEauthorblockN{" + name_line + "}")
-        affil = []
-        if a["department"]:
-            affil.append(escape_latex(a["department"]))
-        if a["institution"]:
-            affil.append(escape_latex(a["institution"]))
-        affil_str = r"\\ ".join(affil)
-        latex.append(r"\IEEEauthorblockA{" + affil_str + r"\\" + f"Email: \\texttt{{{escape_latex(a['email'])}}}" + "}")
-        if idx != len(authors) - 1:
-            latex.append(r"\and")
-    latex.append(r"}")
-    latex.append("")
+    def format_body(self, body_sections):
+        latex = []
+        for section in body_sections:
+            if section.get("type") == "section":
+                latex.append(f"\\section{{{section.get('heading','')}}}")
+                for item in section.get("content", []):
+                    latex.append(self.format_content_item(item))
+        return '\n\n'.join(latex)
 
-    latex.append(r"\begin{document}")
-    latex.append(r"\maketitle")
-    latex.append("")
+    def format_content_item(self, item):
+        if item.get("type") == "paragraph":
+            return self.clean_latex_text(item.get("text", ""))
+        elif item.get("type") == "figure":
+            return self.format_figure(item)
+        elif item.get("type") == "list":
+            return self.format_list(item)
+        elif item.get("type") == "table":
+            return self.format_table(item)
+        elif item.get("type") == "subsection":
+            return f"\\subsection{{{item.get('heading','')}}}\n\n" + \
+                   '\n\n'.join([self.format_content_item(subitem) for subitem in item.get("content", [])])
+        return ""
 
-    def is_table_line(line):
-        return line.strip().startswith("|") and line.strip().endswith("|")
+    def clean_latex_text(self, text):
+        # Escape special LaTeX characters
+        text = text.replace('&', '\\&')
+        text = text.replace('%', '\\%')
+        text = text.replace('$', '\\$')
+        text = text.replace('#', '\\#')
+        text = text.replace('_', '\\_')
+        text = text.replace('{', '\\{')
+        text = text.replace('}', '\\}')
+        text = text.replace('~', '\\textasciitilde')
+        text = text.replace('^', '\\textasciicircum')
+        text = text.replace('\\', '\\textbackslash')
+        return text
 
-    def process_table(start_idx):
-        table_lines = []
-        idx = start_idx
-        while idx < n and is_table_line(lines[idx]):
-            table_lines.append(lines[idx].strip())
-            idx += 1
-        headers = [h.strip() for h in table_lines[0].strip("|").split("|")]
-        data_rows = []
-        for l in table_lines[2:]:
-            row = [c.strip() for c in l.strip("|").split("|")]
-            data_rows.append(row)
+    def format_figure(self, figure):
+        caption = self.clean_latex_text(figure.get("caption", ""))
+        label = figure.get("label", "").replace(" ", "")
+        path = figure.get("content", "").replace("\\", "/")  # Fix path separators
+        
+        return (
+            "\\begin{figure}[H]\n"
+            "\\centering\n"
+            f"\\includegraphics[width=0.8\\textwidth]{{{path}}}\n"
+            f"\\caption{{{caption}}}\n"
+            f"\\label{{{label}}}\n"
+            "\\end{figure}"
+        )
 
-        captions = []
-        cap_idx = idx
-        while cap_idx < n and lines[cap_idx].strip() != "":
-            cap_line = lines[cap_idx].strip()
-            if cap_line.lower().startswith("table:"):
-                captions.append(cap_line[6:].strip())
-            else:
-                break
-            cap_idx += 1
-        return headers, data_rows, captions, cap_idx
+    def format_list(self, item):
+        items = '\n'.join([f"  \\item {self.clean_latex_text(i)}" for i in item.get("items",[])])
+        return "\\begin{itemize}\n" + items + "\n\\end{itemize}"
 
-    def prettify_caption(caption):
-        caption = caption.strip()
-        if not caption:
+    def format_table(self, table):
+        headers = [self.clean_latex_text(h) for h in table.get("header", [])]
+        rows = [[self.clean_latex_text(cell) for cell in row] for row in table.get("rows", [])]
+        col_format = " | ".join(["l"] * len(headers))
+        latex_rows = [' & '.join(row) + " \\\\" for row in rows]
+        
+        return (
+            "\\begin{table}[H]\n\\centering\n"
+            f"\\caption{{{table.get('label','')}}}\n"
+            f"\\label{{tab:{table.get('label','').lower()}}}\n"
+            f"\\begin{{tabular}}{{|{col_format}|}}\n\\hline\n"
+            + ' & '.join(headers) + " \\\\\n\\hline\n"
+            + '\n'.join(latex_rows) + "\n\\hline\n"
+            "\\end{tabular}\n\\end{table}"
+        )
+
+    def format_references(self, refs):
+        if not refs:
             return ""
-        return caption[0].upper() + caption[1:].replace("_", " ")
+        # Remove duplicates by citation text
+        unique_refs = []
+        seen = set()
+        for r in refs:
+            citation = r['citation']
+            if citation not in seen:
+                seen.add(citation)
+                unique_refs.append(r)
+        return '\n'.join([f"\\bibitem{{ref{r['id']}}} {self.clean_latex_text(r['citation'])}" for r in unique_refs])
 
-    def unescape_graphics_path(path):
-        return path.replace("\\", "/")
+    def default_template(self):
+        return r"""
+\documentclass{llncs}
 
-    while i < n:
-        line = lines[i].strip()
-        if not line:
-            i += 1
-            continue
+% PACKAGES
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amsfonts,amssymb}
+\usepackage{graphicx}
+\usepackage{cite}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{booktabs}
 
-        # Numbered sections
-        m_sec = re.match(r"^(\d+)\.\s+(.*)", line)
-        if m_sec:
-            sec_title = m_sec.group(2)
-            latex.append(r"\section{" + escape_latex(sec_title) + "}")
-            i += 1
-            continue
+% TITLE
+\title{ {{ title }} }
 
-        # Section keywords without number
-        if line.lower() in ["introduction", "applications", "conclusion", "contact"]:
-            if line.lower() == "contact":
-                latex.append(r"\section*{Contact}")
-                i += 1
-                contact_lines = []
-                while i < n and lines[i].strip():
-                    contact_lines.append(lines[i].strip())
-                    i += 1
-                contact_text = " ".join(contact_lines)
-                m_email = re.search(r"Email:\s*(\S+)", contact_text)
-                if m_email:
-                    email = m_email.group(1)
-                    contact_text = contact_text.replace(m_email.group(0), "")
-                    latex.append(r"Contact: " + escape_latex(contact_text.strip()))
-                    latex.append(r"\\")
-                    latex.append(r"Email: \texttt{" + escape_latex(email) + "}")
-                else:
-                    latex.append(escape_latex(contact_text))
-                continue
-            else:
-                latex.append(r"\section{" + escape_latex(line) + "}")
-                i += 1
-                continue
+% AUTHORS BLOCK
+\author{ {{ author_block | safe }} }
 
-        # Bullet lists
-        if re.match(r"^(\*|•|-)\s+", line):
-            latex.append(r"\begin{itemize}")
-            while i < n and re.match(r"^(\*|•|-)\s+", lines[i].strip()):
-                item = re.sub(r"^(\*|•|-)\s+", "", lines[i].strip())
-                latex.append(r"\item " + escape_latex(item))
-                i += 1
-            latex.append(r"\end{itemize}")
-            continue
+\begin{document}
 
-        # Tables
-        if is_table_line(line):
-            headers, data_rows, captions, new_i = process_table(i)
-            latex.append(r"\begin{table}[h]")
-            latex.append(r"\centering")
-            col_fmt = "|" + "c|" * len(headers)
-            latex.append(r"\begin{tabular}{" + col_fmt + "}")
-            latex.append(r"\hline")
-            latex.append(" & ".join(escape_latex(h) for h in headers) + r" \\")
-            latex.append(r"\hline")
-            for row in data_rows:
-                latex.append(" & ".join(escape_latex(cell) for cell in row) + r" \\")
-            latex.append(r"\hline")
-            latex.append(r"\end{tabular}")
-            if captions:
-                unique_captions = ", ".join(sorted(set(captions)))
-                latex.append(r"\caption{" + escape_latex(prettify_caption(unique_captions)) + "}")
-            latex.append(r"\end{table}")
-            i = new_i
-            # Skip any remaining "Table: ..." lines
-            while i < n and lines[i].strip().lower().startswith("table:"):
-                i += 1
-            continue
+\maketitle
 
-        # Figures placeholders
-        m_figtext = re.match(r"Fig\s*\d*\s*:\s*(.+)", line, re.I)
-        if m_figtext:
-            cap_text = m_figtext.group(1).strip()
-            latex.append("% Figure placeholder for: " + escape_latex(cap_text))
-            i += 1
-            continue
+% ABSTRACT
+\begin{abstract}
+{{ abstract }}
+\end{abstract}
 
-        m_img = re.match(r"<<IMAGE:(.+)>>", line)
-        if m_img:
-            img_path = m_img.group(1).strip()
-            base_name = img_path.split("/")[-1]
-            cap_text = base_name.rsplit(".", 1)[0].replace("_", " ").title()
-            label_text = re.sub(r"[^a-zA-Z0-9]+", "", base_name)
-            latex.append(r"\begin{figure}[h]")
-            latex.append(r"\centering")
-            latex.append(r"\includegraphics[width=0.6\linewidth]{" + unescape_graphics_path(img_path) + "}")
-            latex.append(r"\caption{" + escape_latex(cap_text) + "}")
-            latex.append(r"\label{fig:" + label_text + "}")
-            latex.append(r"\end{figure}")
-            i += 1
-            continue
+% KEYWORDS
+{% if keywords %}
+\keywords{ {{ keywords }} }
+{% endif %}
 
-        # Paragraphs
-        para_lines = []
-        while i < n and lines[i].strip() and not is_table_line(lines[i]) and not re.match(r"Fig\s*\d*\s*:", lines[i], re.I) and not re.match(r"<<IMAGE:.+>>", lines[i]):
-            para_lines.append(lines[i].strip())
-            i += 1
-        if para_lines:
-            paragraph = " ".join(para_lines)
-            latex.append(escape_latex(paragraph))
-            latex.append("")
-            continue
+% MAIN CONTENT
+{{ content | safe }}
 
-        i += 1
+% REFERENCES
+\bibliographystyle{splncs04}
+\begin{thebibliography}{99}
+{{ bibliography | safe }}
+\end{thebibliography}
 
-    latex.append(r"\end{document}")
-    return "\n".join(latex)
+\end{document}
+        """
 
-def text_to_latex(markdown_text: str) -> str:
-    return convert_text_to_ieee_latex(markdown_text)
+def text_to_latex(extracted_data: dict) -> str:
+    try:
+        active_template = LatexDocument.objects.get(is_active=True)
+        f = active_template.tex_file.open()
+        with TextIOWrapper(f, encoding='utf-8') as text_file:
+            template_content = text_file.read()
+    except LatexDocument.DoesNotExist:
+        template_content = None
+
+    if template_content:
+        converter = LatexConverter(
+            template_key=active_template.title.lower(),
+            template_content=template_content
+        )
+    else:
+        converter = LatexConverter(template_key='default')
+
+    return converter.convert(extracted_data)

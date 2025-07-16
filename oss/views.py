@@ -1339,7 +1339,6 @@ def Setting_proof(request):
 
 #     return JsonResponse({'success': False, 'error': 'Invalid request'})
 
-
 def upload_typeset_document(request):
     if request.method == 'POST' and request.headers.get('x-requested-with') == 'XMLHttpRequest':
         submission_id = request.POST.get('submission_id')
@@ -1357,17 +1356,25 @@ def upload_typeset_document(request):
             filename = fs.save(typeset_file.name, typeset_file)
             filepath = fs.path(filename)
 
-            # Extract text based on file extension
+            # --- Use unified extraction logic ---
+            extracted_content = None
             if filename.endswith('.docx'):
-                text = extract_docx(filepath)
+                extracted_content = extract_docx(filepath)
             elif filename.endswith('.pdf'):
-                text = extract_pdf(filepath)
+                extracted_content = extract_pdf(filepath)
             else:
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    text = f.read()
+                raw_text = typeset_file.read().decode('utf-8')
+                extracted_content = {
+                    "metadata": {},
+                    "body": [{"type": "paragraph", "text": raw_text}],
+                    "references": [],
+                    "tables": []
+                }
 
-            # Convert text to LaTeX code
-            latex_code = text_to_latex(text.strip())
+            os.remove(filepath)
+
+            extracted_json = json.dumps(extracted_content, indent=2)
+            latex_code = text_to_latex(extracted_content)
             print("Generated LaTeX Code:", latex_code)  # Debug print
 
             # Prepare LaTeX output directory and files
@@ -1387,8 +1394,6 @@ def upload_typeset_document(request):
             pdf_path = os.path.join(output_dir, 'output.pdf')
             if not os.path.exists(pdf_path):
                 error_msg = result.stderr or "PDF generation failed"
-                # Cleanup
-                os.remove(filepath)
                 if os.path.exists(tex_path):
                     os.remove(tex_path)
                 return JsonResponse({'success': False, 'error': error_msg})
@@ -1428,8 +1433,6 @@ def upload_typeset_document(request):
                 print("Email sent successfully")
 
             except Exception as e:
-                # Cleanup temp files
-                os.remove(filepath)
                 if os.path.exists(pdf_path):
                     os.remove(pdf_path)
                 if os.path.exists(tex_path):
@@ -1438,7 +1441,6 @@ def upload_typeset_document(request):
                 return JsonResponse({'success': False, 'error': f"Email sending failed: {str(e)}"})
 
             # Cleanup temp files after success
-            os.remove(filepath)
             if os.path.exists(pdf_path):
                 os.remove(pdf_path)
             if os.path.exists(tex_path):
@@ -1447,7 +1449,6 @@ def upload_typeset_document(request):
             return JsonResponse({'success': True})
 
         except Exception as e:
-            # Catch any other errors in processing
             tb = traceback.format_exc()
             print("Error in upload_typeset_document:", tb)
             return JsonResponse({'success': False, 'error': f"Internal error: {str(e)}"})
