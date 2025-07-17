@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/3.2/ref/settings/
 
 from pathlib import Path
 import os
+from dotenv import load_dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -87,7 +88,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'editorial_manager',
         'USER': 'root',
-        'PASSWORD': 'PNR4erp!!!',
+        'PASSWORD': 'StrongPassword123',
         'HOST': '127.0.0.1',
         'PORT': '3306',
         'OPTIONS': {
@@ -171,13 +172,16 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'jcs@kahedu.edu.in'
-EMAIL_HOST_PASSWORD = 'qcwh iigh aesc ucyr'
+EMAIL_HOST_USER = os.getenv('EMAIL_ADDRESS', '')  
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_PASSWORD', '')  
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-
+TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID')
+TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN')
+TWILIO_WHATSAPP_NUMBER = os.getenv('TWILIO_WHATSAPP_NUMBER')
+TWILIO_SMS_NUMBER = os.getenv('TWILIO_SMS_NUMBER')
 
   
